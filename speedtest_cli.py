@@ -21,6 +21,7 @@ import json
 import signal
 import socket
 import timeit
+import urllib.request
 import platform
 import threading
 
@@ -575,7 +576,7 @@ def speedtest():
                              'information')
     parser.add_argument('--json', action='store_true',
                         help='Suppress verbose output, output in JSON')
-    parser.add_argument('--post', help='Specify a URI to post the json output to')
+    parser.add_argument('--jsonuri', help='Specify a URI to post the json output to')
     parser.add_argument('--list', action='store_true',
                         help='Display a list of speedtest.net servers '
                              'sorted by distance')
@@ -744,8 +745,17 @@ def speedtest():
         output['client'] = config['client']
         output['server'] = best
 
-        if args.post:
-            print('send post to ' + args.post)
+        if args.jsonuri:
+            req = urllib.request.Request(url=args.jsonuri, data=json.dumps(output).encode('utf8'), method='PUT')
+            req.add_header('Content-Type', 'application/json')
+            try:
+                with urllib.request.urlopen(req) as f:
+                    pass
+                print(f.status)
+                print(f.reason)
+            except:
+                print_('Could not submit results to ' + args.jsonuri)
+            
         else:
             print(json.dumps(output, sort_keys=True))
 
