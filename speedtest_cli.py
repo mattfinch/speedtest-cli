@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright 2012-2015 Matt Martz
-# All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -19,6 +17,7 @@ import os
 import re
 import sys
 import math
+import json
 import signal
 import socket
 import timeit
@@ -267,9 +266,6 @@ def downloadSpeed(files, quiet=False):
             thread = FileGetter(file, start)
             thread.start()
             q.put(thread, True)
-            if not quiet and not shutdown_event.isSet():
-                sys.stdout.write('.')
-                sys.stdout.flush()
 
     finished = []
 
@@ -332,9 +328,6 @@ def uploadSpeed(url, sizes, quiet=False):
             thread = FilePutter(url, start, size)
             thread.start()
             q.put(thread, True)
-            if not quiet and not shutdown_event.isSet():
-                sys.stdout.write('.')
-                sys.stdout.flush()
 
     finished = []
 
@@ -399,6 +392,7 @@ def getConfig():
         except AttributeError:  # Python3 branch
             root = DOM.parseString(''.join(configxml))
             config = {
+
                 'client': getAttributesByTagName(root, 'client'),
                 'times': getAttributesByTagName(root, 'times'),
                 'download': getAttributesByTagName(root, 'download'),
@@ -579,6 +573,9 @@ def speedtest():
     parser.add_argument('--simple', action='store_true',
                         help='Suppress verbose output, only show basic '
                              'information')
+    parser.add_argument('--json', action='store_true',
+                        help='Suppress verbose output, output in JSON')
+    parser.add_argument('--post', help='Specify a URI to post the json output to')
     parser.add_argument('--list', action='store_true',
                         help='Display a list of speedtest.net servers '
                              'sorted by distance')
@@ -617,7 +614,7 @@ def speedtest():
     if args.secure:
         scheme = 'https'
 
-    if not args.simple:
+    if not (args.simple or args.json):
         print_('Retrieving speedtest.net configuration...')
     try:
         config = getConfig()
@@ -625,7 +622,7 @@ def speedtest():
         print_('Cannot retrieve speedtest configuration')
         sys.exit(1)
 
-    if not args.simple:
+    if not (args.simple or args.json):
         print_('Retrieving speedtest.net server list...')
     if args.list or args.server:
         servers = closestServers(config['client'], True)
@@ -640,7 +637,7 @@ def speedtest():
     else:
         servers = closestServers(config['client'])
 
-    if not args.simple:
+    if not (args.simple or args.json):
         print_('Testing from %(isp)s (%(ip)s)...' % config['client'])
 
     if args.server:
@@ -698,14 +695,14 @@ def speedtest():
         except:
             best = servers[0]
     else:
-        if not args.simple:
+        if not (args.simple or args.json):
             print_('Selecting best server based on latency...')
         best = getBestServer(servers)
 
-    if not args.simple:
+    if not (args.simple or args.json):
         print_(('Hosted by %(sponsor)s (%(name)s) [%(d)0.2f km]: '
                '%(latency)s ms' % best).encode('utf-8', 'ignore'))
-    else:
+    elif not args.json:
         print_('Ping: %(latency)s ms' % best)
 
     sizes = [350, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000]
@@ -714,26 +711,44 @@ def speedtest():
         for i in range(0, 4):
             urls.append('%s/random%sx%s.jpg' %
                         (os.path.dirname(best['url']), size, size))
-    if not args.simple:
+    if not (args.simple or args.json):
         print_('Testing download speed', end='')
     dlspeed = downloadSpeed(urls, args.simple)
-    if not args.simple:
+    if not (args.simple or args.json):
         print_()
-    print_('Download: %0.2f M%s/s' %
-           ((dlspeed / 1000 / 1000) * args.units[1], args.units[0]))
+    if not args.json:
+        print_('Download: %0.2f M%s/s' %
+                ((dlspeed / 1000 / 1000) * args.units[1], args.units[0]))
 
     sizesizes = [int(.25 * 1000 * 1000), int(.5 * 1000 * 1000)]
     sizes = []
     for size in sizesizes:
         for i in range(0, 25):
             sizes.append(size)
-    if not args.simple:
+    if not (args.simple or args.json):
         print_('Testing upload speed', end='')
     ulspeed = uploadSpeed(best['url'], sizes, args.simple)
-    if not args.simple:
+    if not (args.simple or args.json):
         print_()
-    print_('Upload: %0.2f M%s/s' %
-           ((ulspeed / 1000 / 1000) * args.units[1], args.units[0]))
+    if not args.json:
+        print_('Upload: %0.2f M%s/s' %
+               ((ulspeed / 1000 / 1000) * args.units[1], args.units[0]))
+
+    if args.json:
+        output = {}
+        output['result'] = {}
+        output['result']['upload'] = int(ulspeed*8)
+        output['result']['download'] = int(dlspeed * 8)
+        output['result']['latency'] = best['latency']
+
+        output['client'] = config['client']
+        output['server'] = best
+
+        if args.post:
+            print('send post to ' + args.post)
+        else:
+            print(json.dumps(output, sort_keys=True))
+
 
     if args.share and args.mini:
         print_('Cannot generate a speedtest.net share results image while '
