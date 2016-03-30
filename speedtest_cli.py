@@ -751,13 +751,11 @@ def speedtest():
             try:
                 with urllib.request.urlopen(req) as f:
                     pass
-                print(f.status)
-                print(f.reason)
             except:
                 print_('Could not submit results to ' + args.jsonuri)
             
         else:
-            print(json.dumps(output, sort_keys=True))
+            print_(json.dumps(output, sort_keys=True))
 
 
     if args.share and args.mini:
