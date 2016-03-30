@@ -745,8 +745,11 @@ def speedtest():
         output['client'] = config['client']
         output['server'] = best
 
+        output['server']['idnumber'] = output['server']['id']
+        del output['server']['id']
+
         if args.jsonuri:
-            req = urllib.request.Request(url=args.jsonuri, data=json.dumps(output).encode('utf8'), method='PUT')
+            req = urllib.request.Request(url=args.jsonuri, data=json.dumps(output).encode('utf8'), method='POST')
             req.add_header('Content-Type', 'application/json')
             try:
                 with urllib.request.urlopen(req) as f:
